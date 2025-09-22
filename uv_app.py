@@ -170,6 +170,7 @@ if up1 and up2:
         return "#FFFFFF"
 
     merged["HistColor"] = merged["JNCD"].apply(jncd_hist_color)
+    # plotlyでヒストグラム表示（従来通り）
     fig_hist = go.Figure()
     bins = np.arange(0, merged["JNCD"].max()+0.1, 0.1)
     hist, edges = np.histogram(merged["JNCD"], bins=bins)
@@ -195,6 +196,7 @@ if up1 and up2:
 
     # u′v′プロット（JNCD色分け + 色度図背景）
     st.subheader("🖼️ u′v′プロット（JNCD色分け）")
+    # plotlyでu′v′プロット表示（従来通り）
     fig_j = go.Figure()
     fig_j.add_layout_image(dict(
         source="data:image/png;base64," + encoded_chroma,
@@ -253,14 +255,52 @@ if up1 and up2:
 
     # Excelダウンロード（画像・元データ付）
     buf2 = io.BytesIO()
-    # 画像保存（ヒストグラム）
+    # Excel用画像（matplotlibで静的生成）
+    import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.rcParams['font.family'] = 'Meiryo'
+    # ヒストグラム画像
+    fig_hist_excel, ax_hist_excel = plt.subplots(figsize=(10, 6))
+    fig_hist_excel.subplots_adjust(left=0.07, right=0.98, top=0.92, bottom=0.18)  # x軸余白を詰める
+    bins_excel = np.arange(0, merged["JNCD"].max()+0.1, 0.1)
+    hist_excel, edges_excel, patches_excel = ax_hist_excel.hist(merged["JNCD"], bins=bins_excel, edgecolor="black", align='mid')
+    # x軸範囲をビンの左端から右端までに設定
+    # ax_hist_excel.set_xlim(bins_excel[0] - (bins_excel[1] - bins_excel[0]), bins_excel[-1])
+    ax_hist_excel.set_xticks(bins_excel)
+    ax_hist_excel.set_xlim(bins_excel[0], bins_excel[-1])
+    for patch, left in zip(patches_excel, edges_excel[:-1]):
+        patch.set_facecolor(jncd_hist_color(left))
+    ax_hist_excel.set_title("JNCD の分布")
+    ax_hist_excel.set_xlabel("JNCD 値")
+    ax_hist_excel.set_ylabel("サンプル数")
+    # x軸目盛りを棒グラフ左端に揃える
+    ax_hist_excel.set_xticks(bins_excel[:-1])
+    for label in ax_hist_excel.get_xticklabels():
+        label.set_rotation(45)
+    ax_hist_excel.tick_params(axis='x', which='major', pad=8)
+    # y軸範囲をplotlyと同じに（自動最大値）
+    ax_hist_excel.set_ylim(0, max(hist)+5)
+    plt.tight_layout()
     hist_img = io.BytesIO()
-    fig_hist.write_image(hist_img, format="png")
+    fig_hist_excel.savefig(hist_img, format="png", dpi=150)
     hist_img.seek(0)
-    # 画像保存（u′v′プロット）
+    plt.close(fig_hist_excel)
+    # u′v′プロット画像
+    fig_j_excel, ax_j_excel = plt.subplots(figsize=(9, 9))
+    plot_chromaticity_diagram_CIE1976UCS(show=False, axes=ax_j_excel)
+    ax_j_excel.set_xlim(-0.01, 0.7)
+    ax_j_excel.set_ylim(-0.01, 0.7)
+    ax_j_excel.scatter(merged.u1, merged.v1, s=120, c=merged.Color, edgecolors="white", label="比較①（色分け)")
+    ax_j_excel.scatter(merged.u2, merged.v2, s=40, c="black", marker="x", label="比較②（＋)")
+    ax_j_excel.set_xlabel("u′")
+    ax_j_excel.set_ylabel("v′")
+    ax_j_excel.set_title("u′v′プロット（JNCD色分け）")
+    ax_j_excel.legend()
+    plt.tight_layout()
     plot_img = io.BytesIO()
-    fig_j.write_image(plot_img, format="png")
+    fig_j_excel.savefig(plot_img, format="png", dpi=150)
     plot_img.seek(0)
+    plt.close(fig_j_excel)
 
     with pd.ExcelWriter(buf2, engine="xlsxwriter") as writer:
         # オートフィルタ範囲取得
@@ -287,8 +327,8 @@ if up1 and up2:
                     ws.write(row_idx+4, col_idx, val, workbook.add_format({'bg_color': color}))
                 else:
                     ws.write(row_idx+4, col_idx, val)
-            ws.insert_image("N6", "hist.png", {'image_data': hist_img})
-            ws.insert_image("N30", "plot.png", {'image_data': plot_img})
+        ws.insert_image("N6", "hist.png", {'image_data': hist_img})
+        ws.insert_image("N41", "plot.png", {'image_data': plot_img})
 
         # JNCD結果（ID昇順）
         tbl_id = tbl.sort_values("ID")
@@ -306,8 +346,8 @@ if up1 and up2:
                     ws_id.write(row_idx+4, col_idx, val, workbook.add_format({'bg_color': color}))
                 else:
                     ws_id.write(row_idx+4, col_idx, val)
-            ws_id.insert_image("N6", "hist.png", {'image_data': hist_img})
-            ws_id.insert_image("N30", "plot.png", {'image_data': plot_img})
+        ws_id.insert_image("N6", "hist.png", {'image_data': hist_img})
+        ws_id.insert_image("N42", "plot.png", {'image_data': plot_img})
 
         # JNCD結果（JNCD降順）
         tbl_jncd = tbl.sort_values("JNCD", ascending=False)
@@ -325,8 +365,8 @@ if up1 and up2:
                     ws_jncd.write(row_idx+4, col_idx, val, workbook.add_format({'bg_color': color}))
                 else:
                     ws_jncd.write(row_idx+4, col_idx, val)
-            ws_jncd.insert_image("N6", "hist.png", {'image_data': hist_img})
-            ws_jncd.insert_image("N30", "plot.png", {'image_data': plot_img})
+        ws_jncd.insert_image("N6", "hist.png", {'image_data': hist_img})
+        ws_jncd.insert_image("N30", "plot.png", {'image_data': plot_img})
     buf2.seek(0)
     st.download_button(
         label="📤 Excelに保存（画像・元データ付）",

@@ -7,4 +7,3 @@ openpyxl
 seaborn
 colour-science
 xlsxwriter
-kaleido
