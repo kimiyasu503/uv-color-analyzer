@@ -5,3 +5,5 @@ matplotlib
 plotly
 openpyxl
 seaborn
+colour-science
+xlsxwriter
